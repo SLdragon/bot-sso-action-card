@@ -1,13 +1,12 @@
-import { Activity, CardFactory, MessageFactory, TurnContext } from "botbuilder";
+import { Activity, TurnContext } from "botbuilder";
 import {
   CommandMessage,
   TeamsFxBotCommandHandler,
   TriggerPatterns,
-} from "../sdk/interface";
-import helloWorldCard from "../adaptiveCards/helloworldCommand.json";
-import { AdaptiveCards } from "@microsoft/adaptivecards-tools";
+  MessageBuilder,
+} from "../sdk";
+import helloWorldCard from "../adaptiveCards/helloworldCommandResponse.json";
 import { CardData } from "../cardModels";
-import { MessageBuilder } from "@microsoft/teamsfx";
 
 /**
  * The `HelloWorldCommandHandler` registers a pattern with the `TeamsFxBotCommandHandler` and responds

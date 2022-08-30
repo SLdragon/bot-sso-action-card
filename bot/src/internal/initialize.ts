@@ -1,6 +1,6 @@
 import { HelloWorldCardActionHandler } from "../cardActions/helloworldActionHandler";
 import { HelloWorldCommandHandler } from "../commands/helloworldCommandHandler";
-import { ConversationBot } from "../sdk/conversation";
+import { ConversationBot } from "../sdk";
 
 // Create the command bot and register the command handlers for your app.
 // You can also use the commandBot.command.registerCommands to register other commands
@@ -19,5 +19,5 @@ export const commandBot = new ConversationBot({
   cardAction: {
     enabled: true,
     actions: [new HelloWorldCardActionHandler()],
-  }
+  },
 });

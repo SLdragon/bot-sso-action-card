@@ -4,14 +4,14 @@ import {
   InvokeResponse,
   MessageFactory,
   Middleware,
-  StatusCodes,
   TurnContext,
 } from "botbuilder";
 import {
   AdaptiveCardResponse,
+  InvokeResponseErrorCode,
   TeamsFxAdaptiveCardActionHandler,
 } from "../interface";
-import { InvokeResponseFactory } from "../invokeResponseFactory";
+import { InvokeResponseFactory, InvokeResponseType } from "../invokeResponseFactory";
 
 /**
  * @internal
@@ -32,26 +32,33 @@ export class CardActionMiddleware implements Middleware {
       const actionVerb = action.verb;
 
       for (const handler of this.actionHandlers) {
-        if (handler.triggerVerb === actionVerb) {
+        if (handler.triggerVerb?.toLowerCase() === actionVerb?.toLowerCase()) {
           let response: InvokeResponse;
           try {
             response = await handler.handleActionInvoked(context, action.data);
           } catch (error) {
-            const errorResponse = InvokeResponseFactory.errorResponse(StatusCodes.INTERNAL_SERVER_ERROR, (error as Error)?.message)
+            const errorResponse = InvokeResponseFactory.errorResponse(
+              InvokeResponseErrorCode.InternalServerError,
+              error.message
+            );
             await this.sendInvokeResponse(context, errorResponse);
             throw error;
           }
 
           const responseType = response.body?.type;
           switch (responseType) {
-            case "application/vnd.microsoft.activity.message":
-              await this.sendInvokeResponse(context, response);
-              break;
-            case "application/vnd.microsoft.card.adaptive":
+            case InvokeResponseType.AdaptiveCard:
               const card = response.body?.value;
               if (!card) {
-                await this.sendInvokeResponse(context, InvokeResponseFactory.textMessage(this.defaultMessage));
-                throw new Error(`Adaptive card content cannot be found in the response body`);
+                const errorMessage = "Adaptive card content cannot be found in the response body";
+                await this.sendInvokeResponse(
+                  context,
+                  InvokeResponseFactory.errorResponse(
+                    InvokeResponseErrorCode.InternalServerError,
+                    errorMessage
+                  )
+                );
+                throw new Error(errorMessage);
               }
 
               if (card.refresh && handler.adaptiveCardResponse !== AdaptiveCardResponse.NewForAll) {
@@ -62,7 +69,10 @@ export class CardActionMiddleware implements Middleware {
 
               const activity = MessageFactory.attachment(CardFactory.adaptiveCard(card));
               if (handler.adaptiveCardResponse === AdaptiveCardResponse.NewForAll) {
-                await this.sendInvokeResponse(context, InvokeResponseFactory.textMessage(this.defaultMessage));
+                await this.sendInvokeResponse(
+                  context,
+                  InvokeResponseFactory.textMessage(this.defaultMessage)
+                );
                 await context.sendActivity(activity);
               } else if (handler.adaptiveCardResponse === AdaptiveCardResponse.ReplaceForAll) {
                 activity.id = context.activity.replyToId;
@@ -72,11 +82,14 @@ export class CardActionMiddleware implements Middleware {
                 await this.sendInvokeResponse(context, response);
               }
               break;
-            case "application/vnd.microsoft.error":
+            case InvokeResponseType.Message:
+            case InvokeResponseType.Error:
             default:
               await this.sendInvokeResponse(context, response);
               break;
           }
+
+          break;
         }
       }
     }
@@ -87,7 +100,7 @@ export class CardActionMiddleware implements Middleware {
   private async sendInvokeResponse(context: TurnContext, response: InvokeResponse) {
     await context.sendActivity({
       type: ActivityTypes.InvokeResponse,
-      value: response
+      value: response,
     });
   }
 }
