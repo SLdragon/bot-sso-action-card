@@ -87,7 +87,7 @@ export class AppCredential implements TokenCredential {
           expiresOnTimestamp: authenticationResult.expiresOn!.getTime(),
         };
       }
-    } catch (err) {
+    } catch (err: any) {
       const errorMsg = "Get M365 tenant credential failed with error: " + err.message;
       internalLogger.error(errorMsg);
       throw new ErrorWithCode(errorMsg, ErrorCode.ServiceError);

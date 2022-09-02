@@ -417,7 +417,7 @@ export class NotificationBot {
         try {
           // try get member to see if the installation is still valid
           await TeamsInfo.getPagedMembers(context, 1);
-        } catch (error) {
+        } catch (error: any) {
           if ((error.code as string) === "BotNotInConversationRoster") {
             valid = false;
           }

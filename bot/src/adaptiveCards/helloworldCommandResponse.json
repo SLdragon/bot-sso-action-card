@@ -21,6 +21,16 @@
           "title": "DoStuff"
         }
       ]
+    },
+    {
+      "type": "ActionSet",
+      "actions": [
+        {
+          "type": "Action.Execute",
+          "verb": "doProfile",
+          "title": "DoProfile"
+        }
+      ]
     }
   ],
   "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",

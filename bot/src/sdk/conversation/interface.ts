@@ -4,13 +4,15 @@
 import {
   BotFrameworkAdapter,
   ConversationState,
-  TeamsActivityHandler,
   UserState,
   Activity,
   TurnContext,
   InvokeResponse,
   Storage,
+  SigninStateVerificationQuery,
 } from "botbuilder";
+import { TeamsBotSsoPromptTokenResponse } from "../bot/teamsBotSsoPromptTokenResponse";
+import { AuthenticationConfiguration } from "../models/configuration";
 
 /**
  * The response of a message action, e.g., `sendMessage`, `sendAdaptiveCard`.
@@ -176,11 +178,6 @@ export interface TeamsFxBotCommandHandler {
  */
 export interface TeamsFxBotSsoCommandHandler {
   /**
-   * command id used to create sso command dialog, if not assigned, it will generate random command id
-   */
-  commandId?: string;
-
-  /**
    * The string or regular expression patterns that can trigger this handler.
    */
   triggerPatterns: TriggerPatterns;
@@ -197,7 +194,7 @@ export interface TeamsFxBotSsoCommandHandler {
   handleCommandReceived(
     context: TurnContext,
     message: CommandMessage,
-    ssoToken: string
+    ssoToken: TeamsBotSsoPromptTokenResponse
   ): Promise<string | Partial<Activity> | void>;
 }
 
@@ -214,11 +211,6 @@ export interface CommandOptions {
    * The commands to registered with the sso command bot. Each sso command should implement the interface {@link TeamsFxBotSsoCommandHandler} so that it can be correctly handled by this command bot.
    */
   ssoCommands?: TeamsFxBotSsoCommandHandler[];
-
-  /**
-   * Configurations for sso command bot
-   */
-  ssoConfig?: SsoConfig;
 }
 
 /**
@@ -310,91 +302,60 @@ export interface TeamsFxAdaptiveCardActionHandler {
 }
 
 /**
- * Interface for SSO configuration for BotSSO
+ * Interface for SSO configuration for Bot SSO
  */
-export interface SsoConfig {
+export interface BotSsoConfig {
   /**
-   * Custom sso execution activity handler class which should implement the interface {@link SsoExecutionActivityHandler}. If not provided, it will use {@link DefaultSsoExecutionActivityHandler} by default
+   * aad related configurations
    */
-  CustomSsoExecutionActivityHandler?: new (ssoConfig: SsoConfig) => SsoExecutionActivityHandler;
-
-  /**
-   * The list of scopes for which the token will have access, if not provided, it will use graph permission ["User.Read"] by default
-   */
-  scopes?: string[];
-
-  /**
-   * Conversation state for sso command bot, if not provided, it will use internal memory storage to create a new one.
-   */
-  conversationState?: ConversationState;
-
-  /**
-   * User state for sso command bot, if not provided, it will use internal memory storage to create a new one.
-   */
-  userState?: UserState;
-
-  /**
-   * Used by {@link SsoExecutionDialog} to remove duplicated messages, if not provided, it will use internal memory storage
-   */
-  dedupStorage?: Storage;
-
-  /**
-   * Settings used to configure an teams sso prompt instance.
-   */
-  ssoPromptConfig?: {
+  aad: {
     /**
-     * Number of milliseconds the prompt will wait for the user to authenticate.
-     * Defaults to a value `900,000` (15 minutes.)
+     * The list of scopes for which the token will have access
      */
-    timeout?: number;
+    scopes: string[];
+  } & AuthenticationConfiguration;
+
+  dialog?: {
+    /**
+     * Custom sso execution activity handler class which should implement the interface {@link BotSsoExecutionActivityHandler}. If not provided, it will use {@link DefaultBotSsoExecutionActivityHandler} by default
+     */
+    CustomBotSsoExecutionActivityHandler?: new (
+      ssoConfig?: BotSsoConfig | undefined
+    ) => BotSsoExecutionActivityHandler;
 
     /**
-     * Value indicating whether the TeamsBotSsoPrompt should end upon receiving an
-     * invalid message.  Generally the TeamsBotSsoPrompt will end the auth flow when receives user
-     * message not related to the auth flow. Setting the flag to false ignores the user's message instead.
-     * Defaults to value `true`
+     * Conversation state for sso command bot, if not provided, it will use internal memory storage to create a new one.
      */
-    endOnInvalidMessage?: boolean;
-  };
-
-  /**
-   * teamsfx configuration for sso
-   */
-  teamsFxConfig?: {
-    /**
-     * Hostname of AAD authority, default value comes from M365_AUTHORITY_HOST environment variable.
-     */
-    authorityHost?: string;
+    conversationState?: ConversationState;
 
     /**
-     * The client (application) ID of an App Registration in the tenant, default value comes from M365_CLIENT_ID environment variable.
+     * User state for sso command bot, if not provided, it will use internal memory storage to create a new one.
      */
-    clientId?: string;
+    userState?: UserState;
 
     /**
-     * AAD tenant id, default value comes from M365_TENANT_ID environment variable.
+     * Used by {@link BotSsoExecutionDialog} to remove duplicated messages, if not provided, it will use internal memory storage
      */
-    tenantId?: string;
+    dedupStorage?: Storage;
 
     /**
-     * Secret string that the application uses when requesting a token. Only used in confidential client applications. Can be created in the Azure app registration portal. Default value comes from M365_CLIENT_SECRET environment variable.
+     * Settings used to configure an teams sso prompt dialog.
      */
-    clientSecret?: string;
+    ssoPromptConfig?: {
+      /**
+       * Number of milliseconds the prompt will wait for the user to authenticate.
+       * Defaults to a value `900,000` (15 minutes.)
+       */
+      timeout?: number;
 
-    /**
-     * The content of a PEM-encoded public/private key certificate.
-     */
-    certificateContent?: string;
-
-    /**
-     * Login page for Teams to redirect to.  Default value comes from INITIATE_LOGIN_ENDPOINT environment variable.
-     */
-    initiateLoginEndpoint?: string;
-
-    /**
-     * Application ID URI. Default value comes from M365_APPLICATION_ID_URI environment variable.
-     */
-    applicationIdUri?: string;
+      /**
+       * Value indicating whether the TeamsBotSsoPrompt should end upon receiving an
+       * invalid message.  Generally the TeamsBotSsoPrompt will end the auth flow when receives user
+       * message not related to the auth flow. Setting the flag to false ignores the user's message instead.
+       * Defaults to value `true`
+       */
+      endOnInvalidMessage?: boolean;
+    };
   };
 }
 
@@ -419,6 +380,11 @@ export interface ConversationOptions {
    * If neither `adapter` nor `adapterConfig` is provided, will use BOT_ID and BOT_PASSWORD from environment variables.
    */
   adapterConfig?: { [key: string]: unknown };
+
+  /**
+   * Configurations for sso command bot
+   */
+  ssoConfig?: BotSsoConfig;
 
   /**
    * The command part.
@@ -454,10 +420,27 @@ export interface ConversationOptions {
 /**
  * Interface for user to customize sso execution activity handler
  */
-export interface SsoExecutionActivityHandler extends TeamsActivityHandler {
+export interface BotSsoExecutionActivityHandler {
   /**
-   * Add {@link TeamsFxBotSsoCommandHandler} instance to {@link SsoExecutionDialog}
-   * @param handler instance of {@link TeamsFxBotSsoCommandHandler}
+   * Add {@link TeamsFxBotSsoCommandHandler} instance to {@link BotSsoExecutionDialog}
+   * @param handler {@link BotSsoExecutionDialogHandler} callback function
+   * @param triggerPatterns The trigger pattern
    */
-  addCommand(handler: TeamsFxBotSsoCommandHandler): void;
+  addCommand(handler: BotSsoExecutionDialogHandler, triggerPatterns: TriggerPatterns): void;
+  run(context: TurnContext): Promise<void>;
+  handleTeamsSigninVerifyState(
+    context: TurnContext,
+    query: SigninStateVerificationQuery
+  ): Promise<void>;
+  handleTeamsSigninTokenExchange(
+    context: TurnContext,
+    query: SigninStateVerificationQuery
+  ): Promise<void>;
+  onSignInInvoke(context: TurnContext): Promise<void>;
 }
+
+export type BotSsoExecutionDialogHandler = (
+  context: TurnContext,
+  tokenResponse: TeamsBotSsoPromptTokenResponse,
+  message: CommandMessage
+) => Promise<void>;

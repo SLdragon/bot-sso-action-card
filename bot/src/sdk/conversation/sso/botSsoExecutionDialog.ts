@@ -18,32 +18,34 @@ import {
   tokenExchangeOperationName,
   TurnContext,
 } from "botbuilder";
-import { CommandMessage, TeamsFxBotSsoCommandHandler, TriggerPatterns } from "../interface";
+import { CommandMessage, BotSsoExecutionDialogHandler, TriggerPatterns } from "../interface";
 import { TeamsBotSsoPrompt, TeamsBotSsoPromptSettings } from "../../bot/teamsBotSsoPrompt";
 import { TeamsBotSsoPromptTokenResponse } from "../../bot/teamsBotSsoPromptTokenResponse";
 import { TeamsFx } from "../../core/teamsfx";
-import { v4 as uuidv4 } from "uuid";
 import { formatString } from "../../util/utils";
 import { ErrorCode, ErrorMessage, ErrorWithCode } from "../../core/errors";
 import { internalLogger } from "../../util/logger";
+import { createHash } from "crypto";
 
-let DIALOG_NAME = "SsoExecutionDialog";
+let DIALOG_NAME = "BotSsoExecutionDialog";
 let TEAMS_SSO_PROMPT_ID = "TeamsFxSsoPrompt";
 let COMMAND_ROUTE_DIALOG = "CommandRouteDialog";
 
 /**
  * Sso execution dialog, use to handle sso command
  */
-export class SsoExecutionDialog extends ComponentDialog {
+export class BotSsoExecutionDialog extends ComponentDialog {
   private dedupStorage: Storage;
   private dedupStorageKeys: string[] = [];
+
+  // Map to store the commandId and triggerPatterns, key: commandId, value: triggerPatterns
   private commandMapping: Map<string, string | RegExp | (string | RegExp)[]> = new Map<
     string,
     string | RegExp | (string | RegExp)[]
   >();
 
   /**
-   * Creates a new instance of the SsoExecutionDialog.
+   * Creates a new instance of the BotSsoExecutionDialog.
    * @param dedupStorage Helper storage to remove duplicated messages
    * @param settings The list of scopes for which the token will have access
    * @param teamsfx {@link TeamsFx} instance for authentication
@@ -77,56 +79,49 @@ export class SsoExecutionDialog extends ComponentDialog {
 
   /**
    * Add TeamsFxBotSsoCommandHandler instance
-   * @param handler TeamsFxBotSsoCommandHandler instance
+   * @param handler {@link BotSsoExecutionDialogHandler} callback function
+   * @param triggerPatterns The trigger pattern
    */
-  public addCommand(handler: TeamsFxBotSsoCommandHandler): void {
-    if (!handler.commandId) {
-      handler.commandId = uuidv4();
-    }
-    const dialog = new WaterfallDialog(handler.commandId, [
+  public addCommand(handler: BotSsoExecutionDialogHandler, triggerPatterns: TriggerPatterns): void {
+    const commandId = this.getCommandHash(triggerPatterns);
+    const dialog = new WaterfallDialog(commandId, [
       this.ssoStep.bind(this),
       this.dedupStep.bind(this),
       async (stepContext: any) => {
         const tokenResponse: TeamsBotSsoPromptTokenResponse = stepContext.result.tokenResponse;
         const context: TurnContext = stepContext.context;
+        const message: CommandMessage = stepContext.result.message;
+
         try {
           if (tokenResponse) {
-            const message: CommandMessage = stepContext.result.message;
-            const matchResult = this.shouldTrigger(handler.triggerPatterns, message.text);
-            message.matches = Array.isArray(matchResult) ? matchResult : void 0;
-            const response = await handler.handleCommandReceived(
-              context,
-              message,
-              tokenResponse.ssoToken
-            );
-
-            if (typeof response === "string") {
-              await context.sendActivity(response);
-            } else {
-              const replyActivity = response as Partial<Activity>;
-              if (replyActivity) {
-                await context.sendActivity(replyActivity);
-              }
-            }
+            await handler(context, tokenResponse, message);
           } else {
-            await context.sendActivity("Failed to retrieve user token from conversation context.");
+            throw new Error(ErrorMessage.FailedToRetrieveSsoToken);
           }
           return await stepContext.endDialog();
-        } catch (error) {
-          await context.sendActivity("Failed to retrieve user token from conversation context.");
-          await context.sendActivity((error as Error).message as string);
-          return await stepContext.endDialog();
+        } catch (error: unknown) {
+          const errorMsg = formatString(
+            ErrorMessage.FailedToProcessSsoHandler,
+            (error as Error).message
+          );
+          internalLogger.error(errorMsg);
+          return await stepContext.endDialog(
+            new ErrorWithCode(errorMsg, ErrorCode.FailedToProcessSsoHandler)
+          );
         }
       },
     ]);
 
-    if (this.commandMapping.has(handler.commandId)) {
-      throw new Error(
-        `Cannot add command. There is already a command with same id ${handler.commandId}`
-      );
-    }
-    this.commandMapping.set(handler.commandId, handler.triggerPatterns);
+    this.commandMapping.set(commandId, triggerPatterns);
     this.addDialog(dialog);
+  }
+
+  private getCommandHash(patterns: TriggerPatterns): string {
+    const expressions = Array.isArray(patterns) ? patterns : [patterns];
+    const patternStr = expressions.join();
+    const patternStrWithoutSpecialChar = patternStr.replace(/[^a-zA-Z0-9]/g, "");
+    const hash = createHash("sha256").update(patternStr).digest("hex").toLowerCase();
+    return patternStrWithoutSpecialChar + hash;
   }
 
   /**
@@ -144,6 +139,12 @@ export class SsoExecutionDialog extends ComponentDialog {
     const results = await dialogContext.continueDialog();
     if (results && results.status === DialogTurnStatus.empty) {
       await dialogContext.beginDialog(this.id);
+    } else if (
+      results &&
+      results.status === DialogTurnStatus.complete &&
+      results.result instanceof Error
+    ) {
+      throw results.result;
     }
   }
 
@@ -165,12 +166,14 @@ export class SsoExecutionDialog extends ComponentDialog {
 
     const text = this.getActivityText(turnContext.activity);
 
-    const commandId = this.matchCommands(text);
+    const commandId = this.getMatchesCommandId(text);
     if (commandId) {
       return await stepContext.beginDialog(commandId);
     }
-    await stepContext.context.sendActivity(`Cannot find command: ${turnContext.activity.text}`);
-    return await stepContext.endDialog();
+
+    const errorMsg = formatString(ErrorMessage.CannotFindCommand, turnContext.activity.text);
+    internalLogger.error(errorMsg);
+    throw new ErrorWithCode(errorMsg, ErrorCode.CannotFindCommand);
   }
 
   private async ssoStep(stepContext: any) {
@@ -185,17 +188,23 @@ export class SsoExecutionDialog extends ComponentDialog {
       stepContext.options.commandMessage = message;
 
       return await stepContext.beginDialog(TEAMS_SSO_PROMPT_ID);
-    } catch (error) {
-      const context = stepContext.context;
-      await context.sendActivity("Failed to run SSO step");
-      await context.sendActivity((error as Error).message);
-      return await stepContext.endDialog();
+    } catch (error: unknown) {
+      const errorMsg = formatString(ErrorMessage.FailedToRunSsoStep, (error as Error).message);
+      internalLogger.error(errorMsg);
+      return await stepContext.endDialog(new ErrorWithCode(errorMsg, ErrorCode.FailedToRunSsoStep));
     }
   }
 
   private async dedupStep(stepContext: any) {
+    const tokenResponse = stepContext.result;
+    if (!tokenResponse) {
+      internalLogger.error(ErrorMessage.FailedToRetrieveSsoToken);
+      return await stepContext.endDialog(
+        new ErrorWithCode(ErrorMessage.FailedToRetrieveSsoToken, ErrorCode.FailedToRunSsoStep)
+      );
+    }
+
     try {
-      const tokenResponse = stepContext.result;
       // Only dedup after ssoStep to make sure that all Teams client would receive the login request
       if (tokenResponse && (await this.shouldDedup(stepContext.context))) {
         return Dialog.EndOfTurn;
@@ -204,11 +213,12 @@ export class SsoExecutionDialog extends ComponentDialog {
         tokenResponse,
         message: stepContext.options.commandMessage,
       });
-    } catch (error) {
-      const context = stepContext.context;
-      await context.sendActivity("Failed to run dedup step");
-      await context.sendActivity((error as Error).message);
-      return await stepContext.endDialog();
+    } catch (error: unknown) {
+      const errorMsg = formatString(ErrorMessage.FailedToRunDedupStep, (error as Error).message);
+      internalLogger.error(errorMsg);
+      return await stepContext.endDialog(
+        new ErrorWithCode(errorMsg, ErrorCode.FailedToRunDedupStep)
+      );
     }
   }
 
@@ -243,7 +253,7 @@ export class SsoExecutionDialog extends ComponentDialog {
     try {
       await this.dedupStorage.write(storeItems);
       this.dedupStorageKeys.push(key);
-    } catch (err) {
+    } catch (err: unknown) {
       if (err instanceof Error && err.message.indexOf("eTag conflict")) {
         return true;
       }
@@ -285,22 +295,22 @@ export class SsoExecutionDialog extends ComponentDialog {
     return false;
   }
 
-  private shouldTrigger(patterns: TriggerPatterns, text: string): RegExpMatchArray | boolean {
+  private isPatternMatched(patterns: TriggerPatterns, text: string): boolean {
     const expressions = Array.isArray(patterns) ? patterns : [patterns];
 
     for (const ex of expressions) {
-      const arg = this.matchPattern(ex, text);
-      if (arg) return arg;
+      const matches = this.matchPattern(ex, text);
+      return !!matches;
     }
 
     return false;
   }
 
-  private matchCommands(text: string): string | undefined {
+  private getMatchesCommandId(text: string): string | undefined {
     for (const command of this.commandMapping) {
       const pattern: TriggerPatterns = command[1];
 
-      if (this.shouldTrigger(pattern, text)) {
+      if (this.isPatternMatched(pattern, text)) {
         return command[0];
       }
     }

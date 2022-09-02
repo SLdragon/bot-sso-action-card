@@ -36,7 +36,7 @@ export class CardActionMiddleware implements Middleware {
           let response: InvokeResponse;
           try {
             response = await handler.handleActionInvoked(context, action.data);
-          } catch (error) {
+          } catch (error: any) {
             const errorResponse = InvokeResponseFactory.errorResponse(
               InvokeResponseErrorCode.InternalServerError,
               error.message

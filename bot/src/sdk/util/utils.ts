@@ -28,7 +28,7 @@ export function parseJwt(token: string): SSOTokenInfoBase {
     }
 
     return tokenObj;
-  } catch (err) {
+  } catch (err: any) {
     const errorMsg = "Parse jwt token failed in node env with error: " + err.message;
     internalLogger.error(errorMsg);
     throw new ErrorWithCode(errorMsg, ErrorCode.InternalError);
@@ -115,7 +115,7 @@ export function parseAccessTokenFromAuthCodeTokenResponse(
       expiresOnTimestamp: tokenObject.exp * 1000,
     };
     return accessToken;
-  } catch (error) {
+  } catch (error: any) {
     const errorMsg =
       "Parse access token failed from Auth Code token response in node env with error: " +
       error.message;

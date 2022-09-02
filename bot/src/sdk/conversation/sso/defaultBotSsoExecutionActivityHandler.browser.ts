@@ -3,32 +3,39 @@
 
 import { SigninStateVerificationQuery, TurnContext } from "botbuilder";
 
-import { SsoConfig, TeamsFxBotSsoCommandHandler } from "../interface";
+import { BotSsoConfig, BotSsoExecutionDialogHandler, TriggerPatterns } from "../interface";
 import { ErrorWithCode, ErrorCode, ErrorMessage } from "../../core/errors";
 import { formatString } from "../../util/utils";
 
 /**
  * Default sso execution activity handler
  */
-export class DefaultSsoExecutionActivityHandler {
+export class DefaultBotSsoExecutionActivityHandler {
   /**
-   * Creates a new instance of the DefaultSsoExecutionActivityHandler.
+   * Creates a new instance of the DefaultBotSsoExecutionActivityHandler.
    * @param ssoConfig configuration for sso command bot
    */
-  constructor(ssoConfig: SsoConfig | undefined) {
+  constructor(ssoConfig: BotSsoConfig | undefined) {
     throw new ErrorWithCode(
-      formatString(ErrorMessage.BrowserRuntimeNotSupported, "DefaultSsoExecutionActivityHandler"),
+      formatString(
+        ErrorMessage.BrowserRuntimeNotSupported,
+        "DefaultBotSsoExecutionActivityHandler"
+      ),
       ErrorCode.RuntimeNotSupported
     );
   }
 
   /**
    * Add TeamsFxBotSsoCommandHandler instance to sso execution dialog
-   * @param handler {@link TeamsFxBotSsoCommandHandler} instance
+   * @param handler {@link BotSsoExecutionDialogHandler} callback function
+   * @param triggerPatterns The trigger pattern
    */
-  addCommand(handler: TeamsFxBotSsoCommandHandler): void {
+  addCommand(handler: BotSsoExecutionDialogHandler, triggerPatterns: TriggerPatterns): void {
     throw new ErrorWithCode(
-      formatString(ErrorMessage.BrowserRuntimeNotSupported, "DefaultSsoExecutionActivityHandler"),
+      formatString(
+        ErrorMessage.BrowserRuntimeNotSupported,
+        "DefaultBotSsoExecutionActivityHandler"
+      ),
       ErrorCode.RuntimeNotSupported
     );
   }
@@ -39,7 +46,10 @@ export class DefaultSsoExecutionActivityHandler {
    */
   async run(context: TurnContext) {
     throw new ErrorWithCode(
-      formatString(ErrorMessage.BrowserRuntimeNotSupported, "DefaultSsoExecutionActivityHandler"),
+      formatString(
+        ErrorMessage.BrowserRuntimeNotSupported,
+        "DefaultBotSsoExecutionActivityHandler"
+      ),
       ErrorCode.RuntimeNotSupported
     );
   }
@@ -52,7 +62,10 @@ export class DefaultSsoExecutionActivityHandler {
    */
   async handleTeamsSigninVerifyState(context: TurnContext, query: SigninStateVerificationQuery) {
     throw new ErrorWithCode(
-      formatString(ErrorMessage.BrowserRuntimeNotSupported, "DefaultSsoExecutionActivityHandler"),
+      formatString(
+        ErrorMessage.BrowserRuntimeNotSupported,
+        "DefaultBotSsoExecutionActivityHandler"
+      ),
       ErrorCode.RuntimeNotSupported
     );
   }
@@ -65,7 +78,10 @@ export class DefaultSsoExecutionActivityHandler {
    */
   async handleTeamsSigninTokenExchange(context: TurnContext, query: SigninStateVerificationQuery) {
     throw new ErrorWithCode(
-      formatString(ErrorMessage.BrowserRuntimeNotSupported, "DefaultSsoExecutionActivityHandler"),
+      formatString(
+        ErrorMessage.BrowserRuntimeNotSupported,
+        "DefaultBotSsoExecutionActivityHandler"
+      ),
       ErrorCode.RuntimeNotSupported
     );
   }
@@ -80,7 +96,10 @@ export class DefaultSsoExecutionActivityHandler {
    */
   async onSignInInvoke(context: TurnContext) {
     throw new ErrorWithCode(
-      formatString(ErrorMessage.BrowserRuntimeNotSupported, "DefaultSsoExecutionActivityHandler"),
+      formatString(
+        ErrorMessage.BrowserRuntimeNotSupported,
+        "DefaultBotSsoExecutionActivityHandler"
+      ),
       ErrorCode.RuntimeNotSupported
     );
   }

@@ -2,9 +2,12 @@
 // Licensed under the MIT license.
 
 import { Activity, ActivityTypes, Middleware, TurnContext } from "botbuilder";
+import { TeamsBotSsoPromptTokenResponse } from "../../bot/teamsBotSsoPromptTokenResponse";
+import { ErrorCode, ErrorMessage, ErrorWithCode } from "../../core/errors";
+import { internalLogger } from "../../util/logger";
 import {
   CommandMessage,
-  SsoExecutionActivityHandler,
+  BotSsoExecutionActivityHandler,
   TeamsFxBotCommandHandler,
   TeamsFxBotSsoCommandHandler,
   TriggerPatterns,
@@ -15,41 +18,52 @@ import {
  */
 export class CommandResponseMiddleware implements Middleware {
   public readonly commandHandlers: (TeamsFxBotCommandHandler | TeamsFxBotSsoCommandHandler)[] = [];
+  private readonly ssoCommandHandlers: TeamsFxBotSsoCommandHandler[] = [];
 
-  public activityHandler: SsoExecutionActivityHandler | undefined;
+  public ssoActivityHandler: BotSsoExecutionActivityHandler | undefined;
+  public hasSsoCommand: boolean;
 
   constructor(
     handlers?: TeamsFxBotCommandHandler[],
     ssoHandlers?: TeamsFxBotSsoCommandHandler[],
-    activityHandler?: SsoExecutionActivityHandler | undefined
+    activityHandler?: BotSsoExecutionActivityHandler
   ) {
     handlers = handlers ?? [];
     ssoHandlers = ssoHandlers ?? [];
-    if (handlers.length > 0 || ssoHandlers.length > 0) {
-      this.commandHandlers.push(...handlers, ...ssoHandlers);
+    this.hasSsoCommand = ssoHandlers.length > 0;
+    this.ssoActivityHandler = activityHandler;
 
-      this.activityHandler = activityHandler;
+    if (this.hasSsoCommand && !this.ssoActivityHandler) {
+      internalLogger.error(ErrorMessage.SsoActivityHandlerIsNull);
+      throw new ErrorWithCode(
+        ErrorMessage.SsoActivityHandlerIsNull,
+        ErrorCode.SsoActivityHandlerIsUndefined
+      );
+    }
 
-      for (const ssoHandler of ssoHandlers) {
-        this.activityHandler?.addCommand(ssoHandler);
-      }
+    this.commandHandlers.push(...handlers);
+    for (const ssoHandler of ssoHandlers) {
+      this.addSsoCommand(ssoHandler);
     }
   }
 
-  /**
-   * Set sso execution activity handler
-   * @param activityHandler SsoExecutionActivityHandler instance
-   */
-  public setActivityHandler(activityHandler: SsoExecutionActivityHandler) {
-    this.activityHandler = activityHandler;
-  }
-
-  /**
-   * Get sso execution activity handler
-   * @returns SsoExecutionActivityHandler instance or undefined
-   */
-  public getActivityHandler(): SsoExecutionActivityHandler | undefined {
-    return this.activityHandler;
+  public addSsoCommand(ssoHandler: TeamsFxBotSsoCommandHandler) {
+    this.ssoActivityHandler?.addCommand(
+      async (
+        context: TurnContext,
+        tokenResponse: TeamsBotSsoPromptTokenResponse,
+        message: CommandMessage
+      ) => {
+        const matchResult = this.shouldTrigger(ssoHandler.triggerPatterns, message.text);
+        message.matches = Array.isArray(matchResult) ? matchResult : void 0;
+        const response = await ssoHandler.handleCommandReceived(context, message, tokenResponse);
+        await this.processResponse(context, response);
+      },
+      ssoHandler.triggerPatterns
+    );
+    this.ssoCommandHandlers.push(ssoHandler);
+    this.commandHandlers.push(ssoHandler);
+    this.hasSsoCommand = true;
   }
 
   public async onTurn(context: TurnContext, next: () => Promise<void>): Promise<void> {
@@ -64,7 +78,7 @@ export class CommandResponseMiddleware implements Middleware {
         // when the first command handler is matched.
         if (!!matchResult) {
           if (this.isSsoExecutionHandler(handler)) {
-            await this.activityHandler?.run(context);
+            await this.ssoActivityHandler?.run(context);
           } else {
             const message: CommandMessage = {
               text: commandText,
@@ -74,27 +88,35 @@ export class CommandResponseMiddleware implements Middleware {
               context,
               message
             );
-            if (typeof response === "string") {
-              await context.sendActivity(response);
-            } else {
-              const replyActivity = response as Partial<Activity>;
-              if (replyActivity) {
-                await context.sendActivity(replyActivity);
-              }
-            }
+
+            await this.processResponse(context, response);
           }
+          break;
         }
       }
     } else {
-      await this.activityHandler?.run(context);
+      if (this.hasSsoCommand) {
+        await this.ssoActivityHandler?.run(context);
+      }
     }
     await next();
+  }
+
+  private async processResponse(context: TurnContext, response: string | void | Partial<Activity>) {
+    if (typeof response === "string") {
+      await context.sendActivity(response);
+    } else {
+      const replyActivity = response as Partial<Activity>;
+      if (replyActivity) {
+        await context.sendActivity(replyActivity);
+      }
+    }
   }
 
   private isSsoExecutionHandler(
     handler: TeamsFxBotCommandHandler | TeamsFxBotSsoCommandHandler
   ): boolean {
-    return "commandId" in handler;
+    return this.ssoCommandHandlers.indexOf(handler) >= 0;
   }
 
   private matchPattern(pattern: string | RegExp, text: string): boolean | RegExpMatchArray {
