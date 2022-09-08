@@ -221,6 +221,8 @@ export interface CardActionOptions {
    * The action handlers to registered with the action bot. Each command should implement the interface {@link TeamsFxAdaptiveCardActionHandler} so that it can be correctly handled by this bot.
    */
   actions?: TeamsFxAdaptiveCardActionHandler[];
+
+  ssoActions?: TeamsFxSsoAdaptiveCardActionHandler[];
 }
 
 /**
@@ -299,6 +301,50 @@ export interface TeamsFxAdaptiveCardActionHandler {
    * @remark For more details about the invoke response format, refer to https://docs.microsoft.com/en-us/adaptive-cards/authoring-cards/universal-action-model#response-format.
    */
   handleActionInvoked(context: TurnContext, actionData: any): Promise<InvokeResponse>;
+}
+
+
+/**
+ * Interface for adaptive card action handler that can process card action invoke and return a response.
+ */
+ export interface TeamsFxSsoAdaptiveCardActionHandler {
+  /**
+   * The verb defined in adaptive card action that can trigger this handler.
+   * The verb string here is case-insensitive.
+   */
+  triggerVerb: string;
+
+  /**
+   * Specify the behavior for how the card response will be sent in Teams conversation.
+   * The default value is `AdaptiveCardResponse.ReplaceForInteractor`, which means the card
+   * response will replace the current one only for the interactor.
+   */
+  adaptiveCardResponse?: AdaptiveCardResponse;
+
+  /**
+   * The handler function that will be invoked when the action is fired.
+   * @param context The turn context.
+   * @param actionData The contextual data that associated with the action.
+   * 
+   * @returns A `Promise` representing a invoke response for the adaptive card invoke action.
+   * You can use the `InvokeResponseFactory` utility class to create an invoke response from
+   *  - A text message: 
+   *   ```typescript 
+   *   return InvokeResponseFactory.textMessage("Action is processed successfully!");
+   *   ```
+   *  - An adaptive card:
+   *    ```typescript
+   *    const responseCard = AdaptiveCards.declare(helloWorldCard).render(actionData);
+        return InvokeResponseFactory.adaptiveCard(responseCard);
+   *    ```
+   *  - An error response:
+   *     ```typescript
+   *     return InvokeResponseFactory.errorResponse(InvokeResponseErrorCode.BadRequest, "Invalid request");
+   *     ```
+   * 
+   * @remark For more details about the invoke response format, refer to https://docs.microsoft.com/en-us/adaptive-cards/authoring-cards/universal-action-model#response-format.
+   */
+  handleActionInvoked(context: TurnContext, actionData: any, tokenResponse: TeamsBotSsoPromptTokenResponse): Promise<InvokeResponse>;
 }
 
 /**

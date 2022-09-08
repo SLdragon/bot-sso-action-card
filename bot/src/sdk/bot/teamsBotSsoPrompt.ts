@@ -244,7 +244,7 @@ export class TeamsBotSsoPrompt extends Dialog {
         if (recognized.succeeded) {
           return await dc.endDialog(recognized.value);
         }
-      } else if (isMessage && this.settings.endOnInvalidMessage) {
+      } else if ((isMessage || dc.context.activity.name === "adaptiveCard/action")&& this.settings.endOnInvalidMessage) {
         internalLogger.warn("End Teams Bot SSO Prompt due to invalid message");
         return await dc.endDialog(undefined);
       }
@@ -293,6 +293,7 @@ export class TeamsBotSsoPrompt extends Dialog {
     }
   }
 
+
   /**
    * Ensure bot is running in MS Teams since TeamsBotSsoPrompt is only supported in MS Teams channel.
    * @param dc dialog context
@@ -310,6 +311,7 @@ export class TeamsBotSsoPrompt extends Dialog {
     }
   }
 
+  
   /**
    * Send OAuthCard that tells Teams to obtain an authentication token for the bot application.
    * For details see https://docs.microsoft.com/en-us/microsoftteams/platform/bots/how-to/authentication/auth-aad-sso-bots.

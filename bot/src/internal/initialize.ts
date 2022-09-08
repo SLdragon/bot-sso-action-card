@@ -1,5 +1,6 @@
 import { ConversationState, MemoryStorage, UserState } from "botbuilder";
 import { HelloWorldCardActionHandler } from "../cardActions/helloworldActionHandler";
+import { ProfileSsoActionHandler } from "../cardActions/profileSsoActionHandler";
 import { HelloWorldCommandHandler } from "../commands/helloworldCommandHandler";
 import { ConversationBot, DefaultBotSsoExecutionActivityHandler } from "../sdk";
 
@@ -21,6 +22,7 @@ export const commandBot = new ConversationBot({
   cardAction: {
     enabled: true,
     actions: [new HelloWorldCardActionHandler()],
+    ssoActions: [new ProfileSsoActionHandler()]
   },
   // ssoConfig is optional and by default using the values below
   ssoConfig: {

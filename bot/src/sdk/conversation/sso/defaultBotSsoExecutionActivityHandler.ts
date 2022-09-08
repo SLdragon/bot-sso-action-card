@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 import {
+  AdaptiveCardInvokeResponse,
   BotState,
   ConversationState,
   MemoryStorage,
@@ -15,11 +16,13 @@ import { TeamsBotSsoPromptSettings } from "../../bot/teamsBotSsoPrompt";
 import { TeamsFx } from "../../core/teamsfx";
 import { IdentityType } from "../../models/identityType";
 import {
+  AdaptiveCardResponse,
   BotSsoConfig,
   BotSsoExecutionActivityHandler,
   BotSsoExecutionDialogHandler,
   TriggerPatterns,
 } from "../interface";
+import { InvokeResponseFactory, InvokeResponseType } from "../invokeResponseFactory";
 import { BotSsoExecutionDialog } from "./botSsoExecutionDialog";
 
 /**
@@ -124,5 +127,32 @@ export class DefaultBotSsoExecutionActivityHandler
    */
   async onSignInInvoke(context: TurnContext) {
     await this.ssoExecutionDialog.run(context, this.dialogState);
+  }
+
+  async sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+   
+
+  async onAdaptiveCardInvoke(context: TurnContext,  invokeValue: any): Promise<any> {
+    try {
+      await this.ssoExecutionDialog.run(context, this.dialogState)
+
+
+      //await this.sleep(10000);
+      return {
+        statusCode: 200,
+        type: InvokeResponseType.Message,
+        value: "Login",
+      }
+    }
+    catch(err){
+      return { statusCode: 500, value: 'called' };
+    }
+    finally{
+      //await this.conversationState.saveChanges(context, false);
+      //await this.userState.saveChanges(context, false);
+    }
   }
 }

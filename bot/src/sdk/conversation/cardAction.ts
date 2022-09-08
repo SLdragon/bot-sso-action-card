@@ -1,6 +1,6 @@
 import { BotFrameworkAdapter } from "botbuilder";
 import { CardActionMiddleware } from "./middlewares/cardActionMiddleware";
-import { CardActionOptions, TeamsFxAdaptiveCardActionHandler } from "./interface";
+import { BotSsoConfig, BotSsoExecutionActivityHandler, CardActionOptions, TeamsFxAdaptiveCardActionHandler } from "./interface";
 
 /**
  * A card action bot to respond to adaptive card universal actions.
@@ -15,8 +15,10 @@ export class CardActionBot {
    * @param adapter The bound `BotFrameworkAdapter`.
    * @param options - initialize options
    */
-  constructor(adapter: BotFrameworkAdapter, options?: CardActionOptions) {
-    this.middleware = new CardActionMiddleware(options?.actions);
+  constructor(adapter: BotFrameworkAdapter, options?: CardActionOptions, 
+    ssoCommandActivityHandler?: BotSsoExecutionActivityHandler,
+    ssoConfig?: BotSsoConfig) {
+    this.middleware = new CardActionMiddleware(options?.actions, options.ssoActions, ssoConfig);
     this.adapter = adapter.use(this.middleware);
   }
 

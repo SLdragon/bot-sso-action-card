@@ -124,16 +124,17 @@ export class BotSsoExecutionDialog extends ComponentDialog {
     return patternStrWithoutSpecialChar + hash;
   }
 
+
   /**
    * The run method handles the incoming activity (in the form of a DialogContext) and passes it through the dialog system.
    *
    * @param context The context object for the current turn.
    * @param accessor The instance of StatePropertyAccessor for dialog system.
    */
+  
   public async run(context: TurnContext, accessor: StatePropertyAccessor) {
     const dialogSet = new DialogSet(accessor);
     dialogSet.add(this);
-
     const dialogContext = await dialogSet.createContext(context);
     this.ensureMsTeamsChannel(dialogContext);
     const results = await dialogContext.continueDialog();
@@ -146,6 +147,17 @@ export class BotSsoExecutionDialog extends ComponentDialog {
     ) {
       throw results.result;
     }
+  }
+
+
+  private getInvokeVerb(activity: Activity): string {
+    let text = activity.value.action.verb;
+    text = text
+        .toLowerCase()
+        .replace(/\n|\r\n/g, "")
+        .trim();
+    
+    return text;
   }
 
   private getActivityText(activity: Activity): string {
@@ -161,10 +173,16 @@ export class BotSsoExecutionDialog extends ComponentDialog {
     return text;
   }
 
+
   private async commandRouteStep(stepContext: any) {
     const turnContext = stepContext.context as TurnContext;
-
-    const text = this.getActivityText(turnContext.activity);
+    let text;
+    if(turnContext.activity.type === ActivityTypes.Invoke) {
+      text = this.getInvokeVerb(turnContext.activity);
+    }
+    else {
+      text = this.getActivityText(turnContext.activity);
+    }
 
     const commandId = this.getMatchesCommandId(text);
     if (commandId) {

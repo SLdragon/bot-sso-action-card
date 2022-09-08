@@ -28,7 +28,7 @@
         {
           "type": "Action.Execute",
           "verb": "doProfile",
-          "title": "DoProfile"
+          "title": "ShowProfile"
         }
       ]
     }

@@ -120,7 +120,8 @@ export class ConversationBot {
     }
 
     if (options.cardAction?.enabled) {
-      this.cardAction = new CardActionBot(this.adapter, options.cardAction);
+      this.cardAction = new CardActionBot(this.adapter, options.cardAction, ssoCommandActivityHandler,
+        options.ssoConfig);
     }
   }
 
